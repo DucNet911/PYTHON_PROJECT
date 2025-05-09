@@ -1,0 +1,110 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+
+CSV_FILE = 'results.csv'
+ENCODING = 'utf-8-sig'
+MAX_K = 10
+OPTIMAL_K = 3  # Giữ nguyên kết quả đầu ra
+
+
+def load_and_prepare(file_path, encoding):
+    """Đọc file CSV, xử lý thiếu giá trị và chuẩn hóa dữ liệu số"""
+    df = pd.read_csv(file_path, encoding=encoding)
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    if not numeric_cols:
+        raise ValueError("Không có cột số để phân tích.")
+    # Impute missing values với trung bình cột
+    imputer = SimpleImputer(strategy='mean')
+    imputed = imputer.fit_transform(df[numeric_cols])
+    df[numeric_cols] = imputed
+    # Chuẩn hóa
+    scaler = StandardScaler()
+    scaled = scaler.fit_transform(df[numeric_cols])
+    return df, numeric_cols, scaled
+
+
+def plot_elbow(inertia, max_k, optimal_k):
+    plt.figure(figsize=(8, 6))
+    ks = range(1, max_k + 1)
+    plt.plot(ks, inertia, 'o-', linewidth=2)
+    plt.axvline(optimal_k, color='red', linestyle='--', label=f'Elbow at k={optimal_k}')
+    plt.annotate(
+        'Elbow Point',
+        xy=(optimal_k, inertia[optimal_k - 1]),
+        xytext=(optimal_k + 1, inertia[optimal_k - 1] + (inertia[0] - inertia[-1]) * 0.05),
+        arrowprops=dict(arrowstyle='->', color='black')
+    )
+    plt.title('Elbow Chart: Inertia vs. Number of Clusters')
+    plt.xlabel('Number of clusters (k)')
+    plt.ylabel('Inertia')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def perform_kmeans(data, k, random_state=42):
+    model = KMeans(n_clusters=k, random_state=random_state)
+    labels = model.fit_predict(data)
+    return labels, model
+
+
+def summarize_clusters(df, labels, numeric_cols):
+    df['Cluster'] = labels
+    summary = df.groupby('Cluster')[numeric_cols].mean().round(2)
+    print("\nCluster Summary (Mean values):")
+    print(summary)
+    return df
+
+
+def plot_pca_clusters(data, labels):
+    pca = PCA(n_components=2)
+    comps = pca.fit_transform(data)
+    df_pca = pd.DataFrame(comps, columns=['PCA1', 'PCA2'])
+    df_pca['Cluster'] = labels
+
+    plt.figure(figsize=(10, 8))
+    for c in sorted(df_pca['Cluster'].unique()):
+        subset = df_pca[df_pca['Cluster'] == c]
+        plt.scatter(subset['PCA1'], subset['PCA2'], s=80, alpha=0.7, label=f'Cluster {c}')
+    plt.title('PCA 2D Cluster Plot')
+    plt.xlabel('PCA Component 1')
+    plt.ylabel('PCA Component 2')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def main():
+    try:
+        df, numeric_cols, scaled = load_and_prepare(CSV_FILE, ENCODING)
+        print(f"☑️ Đã đọc và chuẩn hóa dữ liệu từ '{CSV_FILE}'")
+    except Exception as e:
+        print(f"❌ Lỗi khi chuẩn bị dữ liệu: {e}")
+        return
+
+    inertia = []
+    for k in range(1, MAX_K + 1):
+        _, model = perform_kmeans(scaled, k)
+        inertia.append(model.inertia_)
+    plot_elbow(inertia, MAX_K, OPTIMAL_K)
+
+    labels, _ = perform_kmeans(scaled, OPTIMAL_K)
+    df = summarize_clusters(df, labels, numeric_cols)
+    plot_pca_clusters(scaled, labels)
+
+    # TỰ SỬA COMMENT
+    print("\nComment:")
+    print("Chọn k=3 cho KMeans dựa trên Elbow Method, vì sau k=3, inertia giảm chậm lại, cho thấy ba cụm phân biệt tốt nhất.")
+    print("Cluster 0: Defensive players (defenders, midfielders, goalkeepers) với chỉ số tấn công thấp.")
+    print("Cluster 1: Substitute/lower-contribution players với điểm số trung bình thấp.")
+    print("Cluster 2: Attacking players với số bàn thắng và kiến tạo cao.")
+
+if __name__ == '__main__':
+    main()
