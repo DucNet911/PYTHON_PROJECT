@@ -1,0 +1,78 @@
+﻿📊 Thống kê: Standard SoT/90
+==================================================
+🏆 Top 3:
+  Donyell Malen 2.76
+Luis Sinisterra 2.29
+    Jáder Durán 2.12
+
+🔻 Bottom 3:
+Abdukodir Khusanov 0.0
+    Aaron Ramsdale 0.0
+   Aaron Cresswell 0.0
+--------------------------------------------------
+
+📊 Thống kê: Standard G/Sh
+==================================================
+🏆 Top 3:
+       John Stones 1.0
+Myles Lewis-Skelly 0.5
+    Hwang Hee-chan 0.4
+
+🔻 Bottom 3:
+Abdul Fatawu Issahaku 0.0
+   Abdukodir Khusanov 0.0
+      Aaron Cresswell 0.0
+--------------------------------------------------
+
+📊 Thống kê: Standard Dist
+==================================================
+🏆 Top 3:
+ Ibrahim Sangaré 32.0
+Emmanuel Agbadou 31.8
+     Ryan Fraser 31.6
+
+🔻 Bottom 3:
+   John Stones 5.1
+  Harry Clarke 4.5
+Kieran Tierney 2.6
+--------------------------------------------------
+
+📊 Thống kê: Tackles Tkl
+==================================================
+🏆 Top 3:
+Idrissa Gana Gueye 124
+      Daniel Muñoz 113
+        João Gomes 105
+
+🔻 Bottom 3:
+   Alex Palmer 0
+ Alex McCarthy 0
+Aaron Ramsdale 0
+--------------------------------------------------
+
+📊 Thống kê: Tackles TklW
+==================================================
+🏆 Top 3:
+Idrissa Gana Gueye 74
+      Daniel Muñoz 73
+    Moisés Caicedo 64
+
+🔻 Bottom 3:
+   Alex Palmer 0
+ Alex McCarthy 0
+Aaron Ramsdale 0
+--------------------------------------------------
+
+📊 Thống kê: Blocks
+==================================================
+🏆 Top 3:
+ Nathan Collins 71
+        Murillo 67
+Tyrick Mitchell 62
+
+🔻 Bottom 3:
+   Alex Palmer 0
+ Alex McCarthy 0
+Aaron Ramsdale 0
+--------------------------------------------------
+
