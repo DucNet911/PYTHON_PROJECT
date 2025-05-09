@@ -1,0 +1,139 @@
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+import re
+import time
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, r2_score
+import os
+import tracemalloc
+from selenium.webdriver.common.by import By
+from selenium import webdriver
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import mean_absolute_error
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+
+def data(filtered_df):
+    players = {}
+    for name in filtered_df['Player']:
+        players[name] = ''
+    # Khởi tạo Chrome
+    driver = webdriver.Chrome()
+    # Vào trang cần crawl
+    url = 'https://www.footballtransfers.com/us/players/uk-premier-league/'
+    driver.get(url)
+    names = []
+    
+    values = []
+    cnt = 0
+    while cnt < 22:
+        time.sleep(1)
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, 'html.parser')
+        
+        # Tìm bảng cầu thủ
+        table = soup.find('table', class_='table table-hover no-cursor table-striped leaguetable mvp-table similar-players-table mb-0')
+        
+        if table is None:
+            print("Không tìm thấy bảng dữ liệu.")
+            break
+
+        # Lấy tên cầu thủ
+        name_tags = table.find_all('div', class_='text')
+        # Lấy giá trị cầu thủ
+        price_tags = table.find_all('span', class_='player-tag')
+        
+        for n in name_tags:
+            a_tag = n.find('a')
+            if a_tag:
+                names.append(a_tag.get('title'))
+
+        for v in price_tags:
+            values.append(v.text.strip())
+        
+
+        # Tìm nút Next để click
+        try:
+            cnt+=1
+            next_button = driver.find_element(By.CLASS_NAME, 'pagination_next_button')
+            next_button.click()
+        except:
+            print("Hết trang rồi! Dừng lại.")
+            break
+
+    # Đóng driver
+    driver.quit()
+    for i in range(len(names)):
+        if names[i] in players:
+            players[names[i]] = values[i]
+    return players
+
+# Đọc tệp CSV
+try:
+    df = pd.read_csv('results.csv', encoding='utf-8-sig')
+    print("Đọc tệp 'results.csv' thành công.")
+except Exception as e:
+    print(f"Lỗi khi đọc tệp 'results.csv': {e}")
+    exit()
+
+# Lọc cầu thủ có thời gian thi đấu > 900 phút
+filtered_df = df[df['Playing Time Min'] > 900].copy()
+print(f"Đã lọc được {len(filtered_df)} cầu thủ có thời gian thi đấu trên 900 phút.")
+
+# Lấy ETV cho mỗi cầu thủ
+# 1) Lấy một lần dict tên → giá
+player_prices = data(filtered_df)
+
+# 2) Gán cột ETV bằng map qua dict
+filtered_df['ETV'] = filtered_df['Player'].map(player_prices)
+
+# Chuyển đổi giá trị ETV thành số
+
+# Lưu tệp market value CSV
+market_value_df = filtered_df[['Player', 'ETV']]
+market_value_df.to_csv('market value.csv', index=False, encoding='utf-8-sig')
+print("Đã lưu tệp 'market value.csv'.")
+
+#
+# Chọn các đặc trưng
+features = ['Performance Ast', 'Age', 'Playing Time Min', 'Playing Time MP', 'Performance Gls', 'Progression PrgR', 'GCA']
+def get_numeric_columns(df, cols):
+    numeric_cols = []
+    for col in cols:
+        if col in df.columns:
+            try:
+                df[col] = pd.to_numeric(df[col].astype(str).replace(',', ''), errors='coerce')
+                if df[col].notna().sum() > 0:
+                    numeric_cols.append(col)
+            except:
+                pass
+    return numeric_cols
+available_features = get_numeric_columns(df, features)
+# Loại bỏ các hàng có ETV là NaN
+model_df = filtered_df.dropna(subset=available_features + ['ETV'])
+print(f"Số cầu thủ có ETV hợp lệ cho mô hình: {len(model_df)}")
+
+# Chuẩn bị dữ liệu cho mô hình
+X = model_df[available_features]
+y = model_df['ETV']
+
+# Chia dữ liệu thành tập huấn luyện và kiểm tra
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Huấn luyện mô hình
+model = LinearRegression()
+model.fit(X_train, y_train)
+
+# Đánh giá mô hình
+y_pred = model.predict(X_test)
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+print(f'Sai số bình phương trung bình: {mse:.2f}')
+print(f'Điểm R²: {r2:.2f}')
+
+# In hệ số mô hình
+print('Hệ số:', model.coef_)
+print('Hằng số:', model.intercept_)
