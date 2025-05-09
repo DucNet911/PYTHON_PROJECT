@@ -1,0 +1,149 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import re
+
+# ========== CẤU HÌNH CỐ ĐỊNH ==========
+np.random.seed(42)  # Seed ngẫu nhiên
+plt.rcParams.update({'font.size': 12})  # Cố định font size
+HISTOGRAM_BINS = 20  # Số bins cố định cho biểu đồ
+COLOR_PALETTE = {'attack': 'steelblue', 'defense': 'orange'}  # Bảng màu cố định
+
+# ========== CẤU HÌNH ĐƯỜNG DẪN ==========
+TOP_N = 3
+TOP_PLAYERS_FILE = 'top_3.txt'
+RESULTS_FILE = 'results2.csv'  # File để lưu toàn bộ dữ liệu cầu thủ và đội
+HISTOGRAM_DIR = 'histograms'
+ENCODING = 'utf-8-sig'
+CSV_FILE = 'results.csv'  # File dữ liệu gốc
+
+# ========== CHỈ SỐ PHÂN TÍCH ==========
+attacking_cols = ['Standard SoT/90', 'Standard G/Sh', 'Standard Dist']
+defensive_cols = ['Tackles Tkl', 'Tackles TklW', 'Blocks']
+
+
+def load_data():
+    """Đọc và chuẩn hóa dữ liệu với xử lý lỗi chi tiết"""
+    try:
+        df = pd.read_csv(CSV_FILE, encoding=ENCODING)
+        print(f"✅ Đọc file '{CSV_FILE}' thành công")
+
+        # Chuẩn hóa dữ liệu số
+        for col in df.columns:
+            if col not in ['Player', 'Nation', 'Squad', 'Pos', 'Age']:
+                if df[col].dtype == 'object' and df[col].str.contains('%', na=False).any():
+                    df[col] = df[col].str.replace('%', '', regex=False)
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        return df
+
+    except FileNotFoundError:
+        print(f"❌ Lỗi: Không tìm thấy file '{CSV_FILE}'. Vui lòng kiểm tra lại đường dẫn.")
+        exit()
+    except Exception as e:
+        print(f"❌ Lỗi đọc file: {str(e)}")
+        exit()
+
+
+def save_top_players(df, numeric_columns):
+    """Lưu top players với sắp xếp ổn định"""
+    try:
+        with open(TOP_PLAYERS_FILE, 'w', encoding=ENCODING) as f:
+            for col in numeric_columns:
+                sorted_df = df[['Player', col]].dropna().sort_values(
+                    by=[col, 'Player'],
+                    ascending=[False, True]
+                )
+                f.write(f"📊 Thống kê: {col}\n")
+                f.write("=" * 50 + "\n")
+                top_3 = sorted_df.head(TOP_N)
+                f.write("🏆 Top 3:\n")
+                f.write(top_3.to_string(index=False, header=False) + "\n\n")
+                bottom_3 = df[['Player', col]].dropna().sort_values(
+                    by=[col, 'Player'],
+                    ascending=[True, True]
+                ).head(TOP_N).iloc[::-1]
+                f.write("🔻 Bottom 3:\n")
+                f.write(bottom_3.to_string(index=False, header=False) + "\n")
+                f.write("-" * 50 + "\n\n")
+    except Exception as e:
+        print(f"❌ Lỗi khi lưu top players: {str(e)}")
+
+
+def generate_plots(df, numeric_columns, prefix='all'):
+    """Tạo biểu đồ với style cố định"""
+    try:
+        out_dir = os.path.join(HISTOGRAM_DIR, prefix)
+        os.makedirs(out_dir, exist_ok=True)
+        for col in numeric_columns:
+            safe_col = re.sub(r'[^\w]', '_', col)
+            plt.figure(figsize=(10, 6), dpi=100)
+            color = COLOR_PALETTE['attack'] if col in attacking_cols else COLOR_PALETTE['defense']
+            plt.hist(df[col].dropna(), bins=HISTOGRAM_BINS, color=color, edgecolor='black')
+            plt.title(f"Phân bố {col} ({prefix})")
+            plt.xlabel(col)
+            plt.ylabel("Số lượng")
+            plt.tight_layout()
+            plt.savefig(os.path.join(out_dir, f"{safe_col}_{prefix}.png"))
+            plt.close()
+    except Exception as e:
+        print(f"❌ Lỗi khi tạo biểu đồ: {str(e)}")
+
+
+
+def main():
+    # ========== XỬ LÝ DỮ LIỆU ==========
+    df = load_data()
+
+    required_cols = ['Player', 'Squad'] + attacking_cols + defensive_cols
+    for col in required_cols:
+        if col not in df.columns:
+            print(f"❌ Thiếu cột quan trọng: '{col}'. Vui lòng kiểm tra file CSV.")
+            exit()
+
+    numeric_columns = attacking_cols + defensive_cols
+    
+    # 1. Lưu top/bottom players
+    save_top_players(df, numeric_columns)
+    print(f"✅ Đã lưu kết quả top players vào '{TOP_PLAYERS_FILE}'")
+
+    # 2. Tạo biểu đồ ALL PLAYERS (theo cầu thủ)
+    generate_plots(df, numeric_columns, prefix='all_players')
+    print(f"✅ Đã tạo biểu đồ all_players trong '{os.path.join(HISTOGRAM_DIR, 'all_players')}'")
+
+    for team, grp in df.groupby('Squad'):
+        safe_team = re.sub(r'[^\w]', '_', team)
+        generate_plots(grp, numeric_columns, prefix=safe_team)
+    
+    # 3. Phân tích đội và lưu vào DataFrame
+    team_stats = []
+    for team, group in df.groupby('Squad'):
+        stats = {'Squad': team}
+        for col in numeric_columns:
+            stats[f'{col}_median'] = group[col].median()
+            stats[f'{col}_mean'] = group[col].mean()
+            stats[f'{col}_std'] = group[col].std()
+        team_stats.append(stats)
+    team_df = pd.DataFrame(team_stats)
+
+    # 4. Tính trung bình across teams => allplayers trung bình các đội
+    avg_stats = {'Squad': 'allplayers'}
+    for col in numeric_columns:
+        # Lấy cột mean của team_df
+        mean_col = f'{col}_mean'
+        if mean_col in team_df.columns:
+            avg_stats[f'{col}_median'] = team_df[f'{col}_median'].mean()
+            avg_stats[f'{col}_mean'] = team_df[f'{col}_mean'].mean()
+            avg_stats[f'{col}_std'] = team_df[f'{col}_std'].mean()
+    # Append row
+    team_df = pd.concat([team_df, pd.DataFrame([avg_stats])], ignore_index=True)
+
+    # 5. Lưu team_df (bao gồm allplayers) vào CSV
+    team_df.to_csv(RESULTS_FILE, index=False, encoding=ENCODING)
+    print(f"✅ Đã lưu thống kê đội (kèm allplayers) vào '{RESULTS_FILE}'")
+
+    
+
+
+if __name__ == "__main__":
+    main()
